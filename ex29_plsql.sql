@@ -1352,10 +1352,875 @@ begin
 end;
 
 
+
+
+
+
+/*
+
+
+    저장 프로시저
+    1. 저장 프로시저
+    2. 저장 함수
+    
+    저장 함수, Stored Function > 함수, Function
+    - 저장 프로시저와 동일
+    - 반환값이 반드시 존재 > out 파라미터를 말하는게 아니라 > return 문을 사용한다.
+    - out 파라미터를 사용하면 안된다. > return문만 사용
+    - in 파라미터는 사용한다.
+    - 위의 특성 때문에 호출하는 상황+형태가 조금 다르다.
+    
+
+
+*/
+
+
+set serveroutput  on;
+
+
+-- num1 + num2 > return
+create or replace function fnSum(pnum1 in number,pnum2 in number) return number
+is
+begin
+    
+    return pnum1 + pnum2;
+
+end fnSum;
+
+
+--호출
+declare
+    vresult number;
+begin
+    -- 함수 호출 특징 > 자바의 메소드 반환값 동일
+    -- return문 > 단일값 반환 > 호출했던 곳에서 대입 연산자 사용 가능
+    vresult := fnSum(10,20);
+    dbms_output.put_line(vresult);
+
+
+end;
+
+--저장 프로시저는 ANSI-SQL 에서는 사용이 불가능하다.(****) > 단, 함수는 가능하다.
+--반환값을 돌려주는 방식의 차이 > 프로시저와 함수는 사용하는 장소가 다르다.
+
+select
+    height, weight,
+    height + weight,
+    fnSum(height, weight) -- 인자 > 반환값 > 반환값 딱 1개 > 값으로 사용
+from tblComedian;
+
+-- 이름, 부서, 직위, 성별(남자|여자)
+-- ANSI-SQL로
+select
+    name, buseo, jikwi,
+    case
+        when substr(ssn,8,1) = '1' then '남자'
+        when substr(ssn,8,1) = '2' then '여자'
+    end as gender
+from tblInsa;
+
+
+-- 함수로!! 더 간편하게
+create or replace function fnGender(
+    pssn varchar2
+)return varchar2
+is
+begin
+    return case
+            when substr(pssn,8,1) = '1' then '남자'
+            when substr(pssn,8,1) = '2' then '여자'
+        end;
+end;
+
+-- 이와 같이 함수를 사용하면 간단하게 줄일 수 있다.     
+select
+    name, buseo, jikwi,
+    fnGender(ssn) as gender
+from tblInsa;
+
+
+
+-- 반복되는 업무 or (다량의) 복잡한 업무 > 아래 2가지 비용
+
+-- 생산 고비용
+-- 호출 고비용
+-- 개발자 가독성+조작성 저하 > 유지 보수 저하
+-- 팀작업할 때 나쁨
+select
+    name, buseo, jikwi,
+    case
+        when substr(ssn,8,1) = '1' then '남자'
+        when substr(ssn,8,1) = '2' then '여자'
+    end as gender
+from tblInsa;
+
+
+-- 생산 저비용
+-- 호출 저비용
+-- 개발자 가독성+조작성 향상 > 유지 보수 향상
+-- 팀작업할 때 좋음
+select
+    name, buseo, jikwi,
+    fnGender(ssn) as gender
+from tblInsa;
+
+
+/*
+
+    트리거, Trigger
+    - 프로시저의 한 종류
+    - 개발자의 호출이 아닌, 미리 지정한 특정 사건이 발생하면 자동으로 실행되는 프로시저
+    - 예약(사건) > 사건 발생 > 프로시저 자동 호출
+    - 특정 테이블 지정 > 지정 테이블 감시(오라클) >
+        insert or update or delete > 미리 준비 해놓은 프로시저 호출
+    - 부하;;
+        
+    트리거 구문
+    
+    create or replace trigger 트리거명
+        before|after
+        insert|update|delete on 테이블명
+        [for each row]
+    declare
+        선언부;
+    begin
+        실행부;
+    exception
+        예외처리부;
+    end;
+    
+
+
+*/
+
+--befor trigger
+--트리거 실행 > 쿼리 실행
+--쿼리 실행하기 전에 트리거를 실행하기 때문에 조건에 따라 쿼리의 실행 유무를 통제할 수 있다.
+--사전 검사 가능!!
+
+--after trigger
+--쿼리 실행 > 트리거 실행
+--사전 개입 불가능!! > 후처리 작업을 주로 한다.
+
+
+
+-- tblInsa > 직원 퇴사(삭제)
+create or replace trigger trgInsa
+    before     -- 삭제하기 직전에 아래 구현부를 실행해라!!
+    delete     -- 삭제가 발생하는지 감시해라!! 
+    on tblInsa -- 인사 테이블에서
+begin
+    dbms_output.put_line('트리거가 실행되었습니다.');
+    
+    --월요일에는 퇴사가 불가능
+    if to_char(sysdate, 'dy') = '월' then
+    
+        -- 현재 진행하려던 업무(delete 실행 전) > 취소 > 강제로 예외 발생 > 뒤에 이어질 업무(delete)가 취소
+        -- 자바 > throw new Exception()
+        -- -20000 ~ -29999
+        raise_application_error(-20001, '월요일에는 퇴사가 불가능합니다.');
+        
+    end if;
+    
+    
+end;
+
+select * from tblInsa;
+
+delete from tblInsa where num = 1005;
+
+
+delete from tblBonus;
+
+commit;
+
+
+delete from tblInsa where num = 1006;
+
+
+/
+
+-- 로그 기록
+create table tblLogMan (
+    seq number primary key,
+    message varchar2(1000) not null,
+    regdate date default sysdate not null
+);
+
+create sequence seqLogMan;
+
+select * from tblMan;
+
+create or replace trigger trgLogMan
+    after
+    insert or update or delete 
+    on tblMan
+declare
+    vmessage varchar2(1000);
+begin
+    -- insert or update or delete ??
+    dbms_output.put_line('트리거 실행');
+    
+    if inserting then
+        --.put_line('트리거 실행 - 추가');
+        vmessage := '새로운 항목이 추가되었습니다.';
+    elsif updating then
+        --dbms_output.put_line('트리거 실행 - 수정');
+        vmessage := '새로운 항목이 수정되었습니다.';
+    elsif deleting then
+        --dbms_output.put_line('트리거 실행 - 삭제');
+        vmessage := '항목이 삭제되었습니다.';
+    end if;
+    
+    insert into tblLogMan values (seqLogMan.nextVal, vmessage, default);
+    
+end;
+
+
+insert into tblMan values ('테스트', 22, 175, 60, null);
+
+update tblMan set weight = 65 where name = '테스트';
+
+delete from tblMan where name = '테스트';
+
+
+/*
+
+    [for each row]
+    
+    1. 사용 X
+        - 문장(Query) 단위 트리거
+        - 트리거 실행 1회 -> 사건이 적용되는 레코드의 개수와 상관없이 트리거는 1회 호출
+        - 적용된 레코드의 정보가 중요하지 않은 경우 + 사건 자체가 중요한 경우
+    
+    2. 사용 O
+        - 행(Record) 단위 트리거
+        - 트리거 실행 반복 -> 사건이 적용되는 레코드의 개수만큼 트리거가 반복 호출
+        - 적용된 레코드의 정보가 중요한 경우 + 사건 자체보다 영향을 받은 레코드의 정보 하나 하나가 중요한 경우
+        
+*/
+
+select * from tblMan;
+
+create or replace trigger trgMan1
+    after
+    delete
+    on tblMan
+begin
+    dbms_output.put_line('트리거1');
+end;
+
+create or replace trigger trgMan2
+    after
+    delete
+    on tblMan
+begin
+    dbms_output.put_line('트리거2');
+end;
+
+create or replace trigger trgMan3
+    after
+    delete
+    on tblMan
+begin
+    dbms_output.put_line('트리거3');
+end;
+
+-- 특정 테이블에 여러개의 트리거 적용 > 관리 어려움;; > 확인 귀찮음;; > 트리거끼리 충돌! or 재귀 호출
+
+drop trigger trgInsa;
+drop trigger trgLogMan;
+drop trigger trgMan1;
+drop trigger trgMan2;
+drop trigger trgMan3;
+
+
+delete from tblMan where name = '홍길동';
+
+select * from tblLogMan;
+
+
+-- Table A > insert 트리거 > Table B 기록
+-- Table B > insert 트리거 > Table A 기록
+
+-- for each row 사용하는 경우
+-- 적용되는 행의 정보(데이터)를 가져와서 참조할 수 있다.
+-- 상관 관계(:old, :new)를 사용한다. > 일종의 가상 레코드
+
+-- insert
+-- > :new (방금 추가된 행 참조)
+
+-- update
+-- > : old (수정되기 전 행 참조)
+-- > : new (수정된 후 행 참조)
+
+-- delete
+-- > :old (삭제되기 전 행 참조)
+
+
+
+create or replace trigger trgMan
+    after
+    delete
+    on tblMan
+    for each row
+begin
+    dbms_output.put_line('레코드를 삭제했습니다. - '|| :old.name); -- old.name은 삭제되는 이름
+end;
+
+
+create or replace trigger trgMan
+    after
+    update
+    on tblMan
+    for each row
+begin
+    dbms_output.put_line('레코드를 삭제했습니다. - '|| :old.name); -- old.name은 삭제되는 이름
+    dbms_output.put_line('수정하기 전 나이: ' || :old.age);
+    dbms_output.put_line('수정하기 후 나이: ' || :new.age);
+end;
+
+
+
+
+-- 문장 단위 프로시저: delete 1회 실행 > 적용된 행 9개 > 프로시저 1회 실행
+-- 행 단위 프로시저: delete 1회 실행 > 적용된 행 9개 > 프로시저 9회 실행
+delete from tblMan; -- 9명
+
+update tblMan set age = age + 1 where couple is not null;
+
 rollback;
 
 
+--4번 직원 퇴사
+--2번 직원 위임 > 1,4,6 프로젝트 위임
+select * from tblStaff;
+select * from tblProject;
 
+
+-- 직원을 퇴사 > 바로 전 > 담당 프로젝트 체크 > 자동 위임
+
+create or replace trigger trgDeleteStaff
+    before          --3. 전에
+    delete          --2. 퇴사
+    on tblStaff     --1. 직원 테이블에서
+    for each row    --4. 해당 직원 정보
+begin
+    
+    --5. 무언가를 하겠다. > 퇴사 직원의 프로젝트를 다른 직원에게 위임
+    update tblProject set
+        staff_seq = 2
+            where staff_seq =:old.seq; -- 삭제되는 직원의 seq
+      
+end;
+
+delete from tblStaff where seq = 4;
+
+
+
+
+
+
+
+
+
+
+
+-- 회원 테이블, 게시판 테이블
+-- - 포인트 제도
+-- 1. 글 작성 > 포인트 + 100
+-- 2. 글 삭제 > 포인트 - 50
+
+create table tblUser (
+    id varchar2(30) primary key,
+    point number default 10000 not null
+);
+
+create table tblBoard (
+    seq number primary key,
+    subject varchar2(1000) not null,
+    id varchar2(30) not null references tblUser(id)
+);
+
+create sequence seqBoard;
+
+insert into tblUser values('hong', default);
+select * from tblUser;
+
+
+-- 회원 > 글쓰기 > + 100
+-- 회원 > 글삭제 > - 50
+
+-- A. 글을 쓴다.(삭제한다.)
+-- B. 포인트를 누적시킨다.
+
+-- Case 1. 하드 코딩 .. ANSI-SQL
+-- 절차 > 개발자가 직접 제어
+
+--1.1 글쓰기
+insert into tblBoard values (seqBoard.nextVal, '게시판입니다.', 'hong');
+
+--1.2 포인트 누적하기
+update tblUser set point = point + 100 where id = 'hong';
+
+--1.3 
+
+
+select * from tblBoard;
+select * from tblUser;
+
+
+-- Case 2. 프로시저
+create or replace procedure procAddBoard(
+    psubject varchar2,
+    pid varchar2
+)
+is
+begin
+    --2.1 글쓰기 
+    insert into tblBoard values (seqBoard.nextVal, psubject, pid);
+    
+    --2.2 포인트 누적하기
+    update tblUser set point = point + 100 where id = pid;
+
+
+/*
+
+    프로시저 Out Parameter
+    1. 단일값
+        a. number
+        b. varchar2
+        c. date
+    2. 다중값
+        a. cursor ***
+        
+
+
+
+*/
+
+create or replace procedure procBuseo (
+    pbuseo varchar2
+)
+is
+
+    cursor vcursor
+    is
+    select * from tblInsa where buseo = pbuseo;
+    
+    vrow tblInsa%rowtype;
+    
+begin
+    open vcursor;
+    
+    loop
+        
+        --select into
+        fetch vcursor into vrow;
+        exit when vcursor%notfound;
+        
+        dbms_output.put_line(vrow.name || ',' || vrow.buseo);
+        
+    
+    end loop;
+    
+    close vcursor;
+end procBuseo;
+
+
+begin
+    procBuseo('영업부');
+end;
+
+
+
+create of replace procedure procBuseo(
+    pbuseo in varchar2,
+    pcursor out sys_refcursor   -- 커서를 반환값으로 사용할 때 쓰는 자료형
+)
+    -- cursor vcursor is select...
+is
+begin
+
+    open pcursor
+    for
+    select * from tblInsa where buseo = pbuseo; -- 커서를 통채로 반환해주는 코드
+    
+end procBuseo;
+
+
+declare 
+    vcursor sys_refcursor; --커서 참조 변수
+begin
+    procBuseo('영업부', vcursor);
+    
+    loop
+    
+        fetch vcursor into vrow;
+        exit when vcursor%notfound;
+        
+        dbms_output.put_line(vrow.name);
+        
+    end loop;
+    
+    
+    
+end;
+
+-- 프로시저 + 커서 사용
+-- 1. 자체 소비용
+--2. 반환용
+
+
+
+
+
+
+
+
+-----------------------------------------------------------------------------------
+
+-- 프로시저 총 정리(***)
+-- 1. 추가 작업(C)
+create or replace procedure 추가작업 (
+    추가할 데이터 -> in 매개변수,
+    추가할 데이터 -> in 매개변수, --원하는 개수만큼
+    성공 유무 반환 -> out 매개변수 --return 사용X
+)
+is
+    내부 변수 선언
+begin
+    작업(insert + (select, update, delete))
+    commit; --마무리
+exception
+    when others then
+        예외작업
+        rollback; --마무리
+end;
+
+select * from tblTodo;
+
+create sequence todo_seq;
+drop sequence todo_seq;
+-- 사용중 테이블에 적용할 시퀀스 객체를 나중에 만들었을 경우(번호 중복 충돌 발생)
+-- 1. 노가다(낮은 번호)
+select todo_seq.nextval from dual;
+-- 2. seed 지정(권장)
+select max(*) from tblTodo;
+create sequence todo_seq
+    start with 30;
+
+
+insert into tblTodo (seq, title, adddate, completedate) 
+    values (todo_seq.nextval, '할일 추가하기', sysdate, null);
+
+create or replace procedure procAddTodo (
+    ptitle in varchar2,
+    presult out number -- 1 or 0
+)
+is
+begin
+    
+    insert into tblTodo (seq, title, adddate, completedate) 
+        values (todo_seq.nextval, ptitle, sysdate, null);
+    presult := 1; --성공 메시지 반환
+    commit;
+    
+exception
+    when others then
+        presult := 0; --실패 메시지 반환
+        rollback;
+end;
+
+
+
+
+create or replace procedure procAddTodo (
+    ptitle in varchar2,
+    presult out number -- 1 or 0
+)
+is
+    vseq number; --시퀀스 역할
+begin
+
+    select max(seq) + 1 into vseq from tblTodo; --시퀀스 객체와 동일한 역할
+    
+    insert into tblTodo (seq, title, adddate, completedate) 
+        values (vseq, ptitle, sysdate, null);
+    presult := 1; --성공 메시지 반환
+    commit;
+    
+exception
+    when others then
+        presult := 0; --실패 메시지 반환
+        rollback;
+end;
+
+
+--호출
+set serveroutput on;
+
+declare
+    vresult number;
+begin
+    procAddTodo('새로운 할일', vresult);
+    dbms_output.put_line(vresult);
+end;
+
+
+select * from tblTodo;
+
+
+--2. 수정 작업(U)
+create or replace procedure 수정작업(
+    수정할 데이터 -> in 매개변수,
+    수정할 데이터 -> in 매개변수, --원하는 개수
+    식별할 데이터 -> int 매개변수, --where절에 사용할 PK or 데이터
+    성공 유무 반환 -> out 매개변수 -- N or 0
+)
+is
+    내부 변수
+begin
+    작업(update + (insert, update, delete, select))
+    commit;
+exception
+    when others then
+        예외작업
+        rollback;
+end;
+
+
+-- 할일을 했다. > completedate 채우기
+create or replace procedure procCompleteTodo (
+    --수정할 데이터 > sysdate 대치
+    pseq in number,  --수정할 할일 번호
+    presult out number --성공 유무
+)
+is
+begin
+    update tblTodo set
+        completedate = sysdate
+            where seq = pseq;
+    presult := 1;
+    commit;
+exception
+    when others then
+        presult := 0;
+        rollback;
+end;
+
+select * from tblTodo;
+
+declare
+    vresult number;
+begin
+    procCompleteTodo(32, vresult);
+    dbms_output.put_line(vresult);
+end;
+
+
+
+
+--3. 삭제 작업(D)
+create or replace procedure 삭제작업 (
+    식별자 데이터 -> in 매개변수,
+    성공 유무 반환 -> out 매개변수
+)
+is
+    내부 변수
+begin
+    작업(delete + (insert, update, delete, select))
+    commit;
+exception
+    when others then
+        예외작업
+        rollback;
+end;
+
+
+
+create or replace procedure procDeleteTodo (
+    pseq number, --삭제할 할일 번호
+    presult out number --N or 0
+)
+is
+begin
+    delete from tblTodo where seq = pseq;
+    presult := 1;
+    commit;
+exception
+    when others then
+        presult := 0;
+        rollback;
+end;
+
+select * from tblTodo;
+
+declare
+    vresult number;
+begin
+    procDeleteTodo(32, vresult);
+    dbms_output.put_line(vresult);
+end;
+
+
+
+-- 4. 읽기 작업(R)
+-- : 조건없이 반환 
+-- : 조건있고 반환
+-- : 반환 > 단일행 or 다중행 + 단일컬럼 or 다중행
+create or replace procedure 읽기작업 (  
+    조건 데이터 -> in 매개변수,
+    단일 반환값 -> out 매개변수
+)
+is
+    내부 변수
+begin
+    작업(select + (insert, update, delete, select))
+    commit;
+exception
+    when others then
+        예외작업
+        rollback;
+end;
+
+
+create or replace procedure procCountTodo (  
+    pstate in number, -- 0(안한일), 1(한일), 2(모두)
+    pcnt out number
+)
+is
+begin
+    
+    if pstate = 0 then
+        select count(*) into pcnt from tblTodo where completedate is null;
+    elsif pstate = 1 then
+        select count(*) into pcnt from tblTodo where completedate is not null;
+    else
+        select count(*) into pcnt from tblTodo;
+    end if;    
+    
+exception
+    when others then
+        dbms_output.put_line('에러발생');
+end;
+
+
+
+declare
+    vcnt number;
+begin
+    procCountTodo(0, vcnt);
+    dbms_output.put_line(vcnt);
+    procCountTodo(1, vcnt);
+    dbms_output.put_line(vcnt);
+    procCountTodo(2, vcnt);
+    dbms_output.put_line(vcnt);
+end;
+
+
+
+-- 4. 읽기 작업(R)
+create or replace procedure 읽기작업 (  
+    조건 데이터 -> in 매개변수,
+    단일 반환값 -> out 매개변수,
+    단일 반환값 -> out 매개변수,
+    단일 반환값 -> out 매개변수 -- 원하는 만큼 > 1행 + 다중컬럼
+)
+is
+    내부 변수
+begin
+    작업(select + (insert, update, delete, select))
+    commit;
+exception
+    when others then
+        예외작업
+        rollback;
+end;
+
+
+create or replace procedure procCountSetTodo (  
+    --조건 데이터 -> in 매개변수,
+    pcnt1 out number,
+    pcnt2 out number,
+    pcnt3 out number
+)
+is
+begin
+    
+    select count(*) into pcnt1 from tblTodo where completedate is null;
+    select count(*) into pcnt2 from tblTodo where completedate is not null;
+    select count(*) into pcnt3 from tblTodo;
+    
+exception
+    when others then
+        dbms_output.put_line('예외 발생');
+end;
+
+
+declare
+    vcnt1 number;
+    vcnt2 number;
+    vcnt3 number;
+begin
+    procCountSetTodo(vcnt1, vcnt2, vcnt3);
+    dbms_output.put_line(vcnt1);
+    dbms_output.put_line(vcnt2);
+    dbms_output.put_line(vcnt3);
+end;
+
+
+
+
+
+
+-- 4. 읽기 작업(R)
+create or replace procedure 읽기작업 (  
+    조건 데이터 -> in 매개변수,
+    커서 -> out 매개변수 --행이 여러개
+)
+is
+    내부 변수
+begin
+    작업(select + (insert, update, delete, select))
+    commit;
+exception
+    when others then
+        예외작업
+        rollback;
+end;
+
+
+create or replace procedure procListTodo (  
+    presult out sys_refcursor --반환값으로 커서를 사용할 때 사용하는 자료형(= 결과 테이블, ResultSet)
+)
+is
+begin
+    
+    open presult for select * from tblTodo;
+    
+exception
+    when others then
+        dbms_output.put_line('예외 작업');
+end;
+
+
+declare
+    vresult sys_refcursor; --프로시저의 커서
+    vrow tblTodo%rowtype;
+begin
+    
+    procListTodo(vresult);
+    
+    --vresult > 커서 탐색
+    loop
+        fetch vresult into vrow;
+        exit when vresult%notfound;
+        
+        dbms_output.put_line(vrow.title);
+    end loop;
+    
+end;
 
 
 
