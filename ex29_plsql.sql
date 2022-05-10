@@ -1757,6 +1757,7 @@ select * from tblUser;
 -- Case 1. 하드 코딩 .. ANSI-SQL
 -- 절차 > 개발자가 직접 제어
 
+
 --1.1 글쓰기
 insert into tblBoard values (seqBoard.nextVal, '게시판입니다.', 'hong');
 
@@ -1770,19 +1771,89 @@ select * from tblBoard;
 select * from tblUser;
 
 
+
 -- Case 2. 프로시저
-create or replace procedure procAddBoard(
+create or replace procedure procAddBoard (
     psubject varchar2,
     pid varchar2
 )
 is
 begin
-    --2.1 글쓰기 
-    insert into tblBoard values (seqBoard.nextVal, psubject, pid);
-    
-    --2.2 포인트 누적하기
-    update tblUser set point = point + 100 where id = pid;
 
+    -- 2.1 글쓰기
+    insert into tblBoard values (seqBoard.nextVal, psubject, pid);
+
+    -- 2.2 포인트 누적하기
+    update tblUser set point = point + 100 where id = pid;
+    
+    commit;
+
+exception
+    when others then
+        rollback;    
+
+end;
+
+
+
+create or replace procedure procDeleteBoard (
+    pseq number
+)
+is
+    vid varchar2(30);
+begin
+
+    --삭제글의 작성자
+    select id into vid from tblBoard where seq = pseq;
+    
+    -- 2.3 글삭제
+    delete from tblBoard where seq = pseq;
+    
+    -- 2.4 포인트 누적하기
+    update tblUser set point = point - 50 where id = vid;
+    
+    
+    commit;
+
+exception
+    when others then
+        rollback;    
+
+end;
+
+
+begin
+    --procAddBoard('다시 글을 씁니다.', 'hong');
+    procDeleteBoard(2);
+end;
+
+
+
+
+-- Case 3. 트리거
+create or replace trigger trgBoard
+    after
+    insert or delete
+    on tblBoard
+    for each row
+begin
+
+    if inserting then
+        update tblUser set point = point + 100 where id = :new.id;
+    elsif deleting then
+        update tblUser set point = point - 50 where id = :old.id;
+    end if;
+
+end;
+
+
+insert into tblBoard values (seqBoard.nextVal, '또 다시 글을 씁니다.', 'hong');
+delete from tblBoard where seq = 3;
+
+
+
+select * from tblBoard;
+select * from tblUser;
 
 /*
 
@@ -1794,8 +1865,10 @@ begin
     2. 다중값
         a. cursor ***
         
-
-
+        
+    저장 프로시저내에서 커서 사용
+    1. 커서 호출 > 결과값(ResulSet) > 프로시저내에서 소비
+    2. 커서 호출 > 결과값(ResulSet) > 호출했던곳으로 반환
 
 */
 
@@ -1869,7 +1942,7 @@ end;
 
 -- 프로시저 + 커서 사용
 -- 1. 자체 소비용
---2. 반환용
+-- 2. 반환용
 
 
 
